@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SwiftBite Optimizer</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>SwiftBite — Delivery Time Optimizer</h1>
+  <div class="traffic">
+    Traffic:
+    <select id="traffic">
+      <option>low</option>
+      <option selected>normal</option>
+      <option>high</option>
+      <option>severe</option>
+    </select>
+    <button id="setTraffic">Apply</button>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Create Order (What-if ETA)</h2>
+    <div class="row">
+      <label>Restaurant</label>
+      <select id="restaurant"></select>
+    </div>
+    <div class="row">
+      <label>Customer Lat/Lng</label>
+      <input id="lat" type="number" step="0.0001" value="17.4400" />
+      <input id="lng" type="number" step="0.0001" value="78.3970" />
+    </div>
+    <div class="row">
+      <label>Prep Time (override, min)</label>
+      <input id="prep" type="number" min="5" placeholder="(optional)" />
+    </div>
+    <button id="simulate">Simulate & Assign Rider</button>
+
+    <div id="result" class="result hidden">
+      <h3>Assignment & ETA</h3>
+      <div id="eta"></div>
+      <ul id="explain"></ul>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Riders</h2>
+      <ul id="riders"></ul>
+    </div>
+    <div class="card">
+      <h2>Latest Orders</h2>
+      <ul id="orders"></ul>
+    </div>
+  </section>
+</main>
+
+<footer>Try different traffic & prep times to see ETA optimization.</footer>
+
+<script>
+const API = "http://localhost:5000";
+
+async function loadRestaurants(){
+  const r = await fetch(API + "/api/restaurants").then(r=>r.json());
+  const sel = document.getElementById('restaurant');
+  sel.innerHTML = r.map(x=>`<option value="${x.id}">${x.name} — base ${x.base_prep_min}m</option>`).join('');
+}
+
+async function loadRiders(){
+  const r = await fetch(API + "/api/riders").then(r=>r.json());
+  document.getElementById('riders').innerHTML =
+    r.map(x=>`<li>${x.name} • ${x.is_available?'✅ available':'❌ busy'} • active: ${x.active_orders}</li>`).join('');
+}
+
+async function loadOrders(){
+  const r = await fetch(API + "/api/orders").then(r=>r.json());
+  document.getElementById('orders').innerHTML =
+    r.slice(0,6).map(o=>`<li>#${o.id} • R${o.restaurant_id} • ${o.status} • ETA ${o.eta_minutes}m • rider ${o.assigned_rider_id}</li>`).join('');
+}
+
+async function setTraffic(){
+  const level = document.getElementById('traffic').value;
+  await fetch(API + "/api/config/traffic", {
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ level })
+  });
+  await reload();
+}
+
+async function simulate(){
+  const restaurantId = document.getElementById('restaurant').value;
+  const cust_lat = parseFloat(document.getElementById('lat').value);
+  const cust_lng = parseFloat(document.getElementById('lng').value);
+  const prepOverride = document.getElementById('prep').value || undefined;
+  const trafficLevel = document.getElementById('traffic').value;
+
+  const res = await fetch(API + "/api/orders", {
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ restaurantId, cust_lat, cust_lng, prepOverride, trafficLevel })
+  });
+  if(!res.ok){ alert('No rider available or bad input'); return; }
+  const { order, rider, restaurant } = await res.json();
+
+  document.getElementById('result').classList.remove('hidden');
+  document.getElementById('eta').innerHTML =
+    `<div class="eta">ETA: <b>${order.eta_minutes} minutes</b> (pickup ${order.pickup_minutes}m + drop ${order.drop_minutes}m + cook ${Math.max(5,Number(prepOverride||restaurant.current_prep_min))}m)</div>
+     <div class="pill">Assigned Rider: ${rider.name} (#${rider.id})</div>`;
+
+  const UL = document.getElementById('explain');
+  UL.innerHTML = `
+    <li>Traffic level: <b>${order.traffic_level}</b></li>
+    <li>Fairness guard: riders with many active orders are penalized in score</li>
+    <li>Dispatch score weighs pickup (0.5), drop (0.4), load (0.1)</li>
+  `;
+
+  await loadRiders(); await loadOrders();
+}
+
+async function reload(){ await Promise.all([loadRestaurants(), loadRiders(), loadOrders()]); }
+document.getElementById('setTraffic').onclick = setTraffic;
+document.getElementById('simulate').onclick = simulate;
+reload();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SwiftBite Optimizer</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>SwiftBite — Delivery Time Optimizer</h1>
+  <div class="traffic">
+    Traffic:
+    <select id="traffic">
+      <option>low</option>
+      <option selected>normal</option>
+      <option>high</option>
+      <option>severe</option>
+    </select>
+    <button id="setTraffic">Apply</button>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Create Order (What-if ETA)</h2>
+    <div class="row">
+      <label>Restaurant</label>
+      <select id="restaurant"></select>
+    </div>
+    <div class="row">
+      <label>Customer Lat/Lng</label>
+      <input id="lat" type="number" step="0.0001" value="17.4400" />
+      <input id="lng" type="number" step="0.0001" value="78.3970" />
+    </div>
+    <div class="row">
+      <label>Prep Time (override, min)</label>
+      <input id="prep" type="number" min="5" placeholder="(optional)" />
+    </div>
+    <button id="simulate">Simulate & Assign Rider</button>
+
+    <div id="result" class="result hidden">
+      <h3>Assignment & ETA</h3>
+      <div id="eta"></div>
+      <ul id="explain"></ul>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Riders</h2>
+      <ul id="riders"></ul>
+    </div>
+    <div class="card">
+      <h2>Latest Orders</h2>
+      <ul id="orders"></ul>
+    </div>
+  </section>
+</main>
+
+<footer>Try different traffic & prep times to see ETA optimization.</footer>
+
+<script>
+const API = "http://localhost:5000";
+
+async function loadRestaurants(){
+  const r = await fetch(API + "/api/restaurants").then(r=>r.json());
+  const sel = document.getElementById('restaurant');
+  sel.innerHTML = r.map(x=>`<option value="${x.id}">${x.name} — base ${x.base_prep_min}m</option>`).join('');
+}
+
+async function loadRiders(){
+  const r = await fetch(API + "/api/riders").then(r=>r.json());
+  document.getElementById('riders').innerHTML =
+    r.map(x=>`<li>${x.name} • ${x.is_available?'✅ available':'❌ busy'} • active: ${x.active_orders}</li>`).join('');
+}
+
+async function loadOrders(){
+  const r = await fetch(API + "/api/orders").then(r=>r.json());
+  document.getElementById('orders').innerHTML =
+    r.slice(0,6).map(o=>`<li>#${o.id} • R${o.restaurant_id} • ${o.status} • ETA ${o.eta_minutes}m • rider ${o.assigned_rider_id}</li>`).join('');
+}
+
+async function setTraffic(){
+  const level = document.getElementById('traffic').value;
+  await fetch(API + "/api/config/traffic", {
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ level })
+  });
+  await reload();
+}
+
+async function simulate(){
+  const restaurantId = document.getElementById('restaurant').value;
+  const cust_lat = parseFloat(document.getElementById('lat').value);
+  const cust_lng = parseFloat(document.getElementById('lng').value);
+  const prepOverride = document.getElementById('prep').value || undefined;
+  const trafficLevel = document.getElementById('traffic').value;
+
+  const res = await fetch(API + "/api/orders", {
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ restaurantId, cust_lat, cust_lng, prepOverride, trafficLevel })
+  });
+  if(!res.ok){ alert('No rider available or bad input'); return; }
+  const { order, rider, restaurant } = await res.json();
+
+  document.getElementById('result').classList.remove('hidden');
+  document.getElementById('eta').innerHTML =
+    `<div class="eta">ETA: <b>${order.eta_minutes} minutes</b> (pickup ${order.pickup_minutes}m + drop ${order.drop_minutes}m + cook ${Math.max(5,Number(prepOverride||restaurant.current_prep_min))}m)</div>
+     <div class="pill">Assigned Rider: ${rider.name} (#${rider.id})</div>`;
+
+  const UL = document.getElementById('explain');
+  UL.innerHTML = `
+    <li>Traffic level: <b>${order.traffic_level}</b></li>
+    <li>Fairness guard: riders with many active orders are penalized in score</li>
+    <li>Dispatch score weighs pickup (0.5), drop (0.4), load (0.1)</li>
+  `;
+
+  await loadRiders(); await loadOrders();
+}
+
+async function reload(){ await Promise.all([loadRestaurants(), loadRiders(), loadOrders()]); }
+document.getElementById('setTraffic').onclick = setTraffic;
+document.getElementById('simulate').onclick = simulate;
+reload();
+</script>
+</body>
+</html>
